@@ -1,8 +1,6 @@
 import xarray as xa
 import numpy as np
 import pandas as pd
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 
 # # ---------------------------------------------------------------------------------
 # library to calculate the geopotential for each grid cell / model level
