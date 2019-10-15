@@ -11,6 +11,7 @@ import pandas as pd
 era_ds  = None
 ml_df   = None
 lvlmax  = None # 61 for ERAI, 137 for ERA5. set by calling set_data() function
+source  = None
 
 # ---------------------------------------------------------------------------------
 # some gas constants
@@ -33,10 +34,21 @@ def set_data(eds, mldf, lvls):
     global era_ds
     global ml_df
     global lvlmax
+    global source
     
     era_ds  = eds
     ml_df   = mldf
     lvlmax  = lvls
+    
+    if lvls == 137:
+        source = 'era5'
+    elif lvls == 60:
+        source = 'erai'
+    else:
+        source = 'error'
+        print('WARNING!')
+        print('unknown data source, number of model levels supplied not associated with')
+        print('either erai or era5!')
 
 # ----------------------------------------------
 # function get_phikhalf
@@ -94,21 +106,37 @@ def get_p(k,hl):
     global era_ds
     global ml_df
     global lvlmax
-
-    if hl == 0.5:
-        h = 0
-    elif hl == -0.5:
-        h = -1
-    else:
-        print('error, hl needs to be +0.5 or -0.5')
-        
-    if (k < lvlmax) or ((k == lvlmax) and (h==-1)):
+    global source
+    
+    # adressing of the half levels differs slightly between era5 and erai
+    # that's why this case distinction is necessary.
+    if source == 'era5':
+        if hl == 0.5:      # half layer below full level k
+            h = 0
+        elif hl == -0.5:   # half layer above full level k
+            h = -1
+        else:
+            print('error, hl needs to be +0.5 or -0.5')
+    elif source == 'erai': # for erai this is slightly different in how the levels are numbered
+        if hl == 0.5:      # half layer below full level k
+            h = 1
+        elif hl == -0.5:   # half layer above full level k
+            h = 0
+        else:
+            print('error, hl needs to be +0.5 or -0.5')
+            
+    p = era_ds.sp.values*np.nan
+    if (k < lvlmax) or ((k == lvlmax) and (h==-1) and (source=='era5')) or ((k == lvlmax) and (h==0) and (source=='erai')):
         a = ml_df.loc[k+h,'a [Pa]']
         b = ml_df.loc[k+h,'b']
         p = a+b*era_ds.sp.values
-    elif (k == lvlmax) and(h == 0):   # if the half level below 137 is request that's the surface pressure
+    elif ((source == 'era5') and (k == lvlmax) and(h == 0)) or ((source == 'erai') and (k == lvlmax) and(h == 1)):
+        # if the half level below 137 or 60 is requested that's the surface pressure (erai numbering is slightly different)
         p = era_ds.sp.values
-        
+        a = np.nan
+        b = np.nan
+    #print(k,' ',h, ' ',lvlmax)
+    #print(' k=',k, ' hl=',hl,' h=',h,' p=',p[0,0,0],' a=', a,' b=', b)    
     return p
 
 # ----------------------------------------------
@@ -117,7 +145,7 @@ def get_p(k,hl):
 # calculate coefficient alpha_k
 # as given by equation 2.23
 # ----------------------------------------------
-def get_alpha(k):
+def get_alpha(k):   
     if k == 1:
         ak = np.log(2)
     else:
@@ -125,7 +153,6 @@ def get_alpha(k):
         pl = get_p(k,+0.5)
         
         deltapk = pl-pu
-        
         ak = 1-(pu/deltapk)*np.log(pl/pu)
     return ak
   
